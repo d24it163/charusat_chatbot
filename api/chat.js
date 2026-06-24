@@ -15,11 +15,11 @@ export default async function handler(req, res) {
     res.status(500).json({ error: { message: 'Server is missing GEMINI_API_KEY env var.' } });
     return;
   }
-  if (!apiKey.startsWith('AIza') || apiKey.length < 25) {
-    console.error('GEMINI_API_KEY looks malformed', { length: apiKey.length, prefix: apiKey.slice(0, 4) });
-    res.status(500).json({ error: { message: 'GEMINI_API_KEY env var looks malformed (check for extra quotes/spaces).' } });
-    return;
-  }
+  // NOTE: deliberately not validating the key's shape/prefix here.
+  // Google has changed key formats before (AIza... -> AQ....) without
+  // notice, and the Gemini API itself is the only reliable judge of
+  // whether a key is valid. Let the request through and let Gemini's
+  // own response (200 vs 4xx) be the source of truth.
 
   // OPTIONAL: lightweight same-origin check.
   // This is NOT a security boundary (headers can be spoofed by non-browser
