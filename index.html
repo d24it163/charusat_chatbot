@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CHARUSAT University AI Chatbot</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --c-bg: #0a0c14; --c-surface: #111520; --c-panel: #161b2e;
+      --c-border: rgba(99,179,237,0.18); --c-neon: #63b3ed; --c-neon2: #9f7aea;
+      --c-neon3: #68d391; --c-text: #e2e8f0; --c-muted: #718096;
+      --c-user-bubble: #1a2744; --c-bot-bubble: #141a2e;
+      --sidebar-w: 240px;
+    }
+    body {
+      background: #07090f;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; padding: 20px;
+    }
+    .app-shell {
+      display: flex; height: 680px; width: 100%; max-width: 1100px;
+      border-radius: 18px; overflow: hidden; border: 1px solid var(--c-border);
+      box-shadow: 0 0 60px rgba(37,99,235,0.12), 0 0 120px rgba(99,179,237,0.06);
+      position: relative;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: var(--sidebar-w); min-width: var(--sidebar-w);
+      background: #0d1120; border-right: 1px solid var(--c-border);
+      display: flex; flex-direction: column; overflow: hidden;
+      transition: width 0.3s ease, min-width 0.3s ease;
+      position: relative; z-index: 5;
+    }
+    .sidebar.collapsed { width: 0; min-width: 0; }
+    .sidebar-header { padding: 14px 16px 10px; border-bottom: 1px solid var(--c-border); flex-shrink: 0; }
+    .sidebar-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--c-neon); white-space: nowrap; }
+    .sidebar-subtitle { font-size: 10px; color: var(--c-muted); margin-top: 2px; white-space: nowrap; }
+    .sidebar-nav { flex: 1; overflow-y: auto; padding: 10px 8px; scrollbar-width: thin; scrollbar-color: #2d3748 transparent; }
+    .sidebar-nav::-webkit-scrollbar { width: 3px; }
+    .sidebar-nav::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 3px; }
+    .nav-section-label { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--c-muted); padding: 8px 8px 4px; white-space: nowrap; }
+    .nav-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; cursor: pointer; transition: all 0.18s; font-size: 12.5px; color: #94a3b8; white-space: nowrap; overflow: hidden; }
+    .nav-item:hover { background: rgba(99,179,237,0.08); color: var(--c-neon); }
+    .nav-icon { font-size: 14px; flex-shrink: 0; }
+
+    /* Chat */
+    .chat-wrapper { flex: 1; background: var(--c-bg); display: flex; flex-direction: column; min-width: 0; position: relative; }
+    .neon-line { position: absolute; top: 0; left: 0; right: 0; height: 2px; z-index: 10; background: linear-gradient(90deg, #2563eb, #9f7aea, #63b3ed, #68d391, #2563eb); background-size: 200% auto; animation: slide 4s linear infinite; }
+    @keyframes slide { 0%{background-position:0%} 100%{background-position:200%} }
+
+    .chat-header { background: var(--c-panel); border-bottom: 1px solid var(--c-border); padding: 12px 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+    .sidebar-toggle { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--c-border); background: var(--c-surface); cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s; color: var(--c-neon); font-size: 16px; }
+    .sidebar-toggle:hover { background: rgba(99,179,237,0.1); }
+    .logo-ring { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, #2563eb 0%, #9f7aea 100%); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; flex-shrink: 0; }
+    .header-name { font-size: 14px; font-weight: 600; color: var(--c-text); }
+    .header-sub { font-size: 11px; color: var(--c-neon3); display: flex; align-items: center; gap: 5px; margin-top: 1px; }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--c-neon3); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .powered { font-size: 10px; color: var(--c-muted); text-align: right; line-height: 1.5; margin-left: auto; }
+    .powered b { color: #4285f4; }
+
+    .messages { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 13px; scrollbar-width: thin; scrollbar-color: #2d3748 transparent; }
+    .messages::-webkit-scrollbar { width: 4px; }
+    .messages::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 4px; }
+
+    .msg { display: flex; gap: 8px; align-items: flex-end; }
+    .msg.user { flex-direction: row-reverse; }
+    .avatar { width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; background: linear-gradient(135deg, #2563eb, #9f7aea); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #fff; }
+    .avatar.user-av { background: linear-gradient(135deg, #1d4ed8, #6d28d9); }
+    .bubble { max-width: 85%; padding: 10px 14px; border-radius: 14px; font-size: 13px; line-height: 1.65; color: var(--c-text); word-break: break-word; }
+    .bot .bubble { background: var(--c-bot-bubble); border: 1px solid var(--c-border); border-bottom-left-radius: 4px; }
+    .user .bubble { background: var(--c-user-bubble); border: 1px solid rgba(99,179,237,0.25); border-bottom-right-radius: 4px; }
+
+    .bubble table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12px; }
+    .bubble th { background: rgba(99,179,237,0.15); color: var(--c-neon); padding: 6px 9px; text-align: left; border: 1px solid rgba(99,179,237,0.2); font-weight: 600; }
+    .bubble td { padding: 5px 9px; border: 1px solid rgba(99,179,237,0.12); color: var(--c-text); vertical-align: top; }
+    .bubble tr:nth-child(even) td { background: rgba(255,255,255,0.03); }
+    .bubble a { color: var(--c-neon); text-decoration: none; border-bottom: 1px dashed rgba(99,179,237,0.4); }
+    .bubble a:hover { color: #90cdf4; }
+    .streaming-cursor::after { content: '▋'; animation: blink 0.7s infinite; color: var(--c-neon); }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    .typing { display: flex; gap: 5px; padding: 4px 0; }
+    .typing span { width: 7px; height: 7px; border-radius: 50%; display: inline-block; animation: bounce 1.2s infinite; }
+    .typing span:nth-child(1){background:var(--c-neon)} .typing span:nth-child(2){animation-delay:.2s;background:var(--c-neon2)} .typing span:nth-child(3){animation-delay:.4s;background:var(--c-neon3)}
+    @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-7px)} }
+
+    .error-bubble { background: rgba(252,129,129,0.08); border: 1px solid rgba(252,129,129,0.28); border-radius: 10px; padding: 10px 14px; font-size: 12.5px; }
+    .err-title { color: #feb2b2; font-weight: 600; margin-bottom: 4px; }
+    .err-detail { color: #fc8181; font-size: 11.5px; margin-bottom: 5px; }
+    .err-hint { color: #fbb6ce; font-size: 11.5px; }
+    .err-hint a { color: #f687b3; }
+
+    .input-area { background: var(--c-panel); border-top: 1px solid var(--c-border); padding: 12px 14px; display: flex; gap: 9px; align-items: flex-end; flex-shrink: 0; }
+    .input-area textarea { flex: 1; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 10px; color: var(--c-text); font-size: 13px; padding: 9px 13px; resize: none; outline: none; line-height: 1.5; font-family: inherit; max-height: 110px; min-height: 38px; transition: border-color 0.2s; }
+    .input-area textarea:focus { border-color: var(--c-neon); }
+    .input-area textarea::placeholder { color: var(--c-muted); }
+    .send-btn { width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0; background: linear-gradient(135deg, #4285f4, #0f9d58); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: opacity 0.2s, transform 0.1s; }
+    .send-btn:hover { opacity: 0.85; } .send-btn:active { transform: scale(0.95); }
+    .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .send-btn svg { width: 16px; height: 16px; fill: #fff; }
+
+    .greeting-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+    .g-chip { background: var(--c-panel); border: 1px solid var(--c-border); border-radius: 20px; padding: 4px 12px; font-size: 11.5px; color: var(--c-neon); cursor: pointer; transition: all 0.2s; }
+    .g-chip:hover { background: rgba(99,179,237,0.1); border-color: var(--c-neon); }
+
+    @media (max-width: 640px) {
+      body { padding: 0; }
+      .app-shell { height: 100vh; border-radius: 0; border: none; max-width: 100%; }
+      .sidebar { position: absolute; top: 0; left: 0; bottom: 0; z-index: 20; }
+      .bubble { max-width: 92%; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-title">Quick Topics</div>
+      <div class="sidebar-subtitle">CHARUSAT 2026 Guide</div>
+    </div>
+    <div class="sidebar-nav">
+      <div class="nav-section-label">Admissions</div>
+      <div class="nav-item" onclick="quickAsk('Tell me about admissions at CHARUSAT 2026 - eligibility, process and steps')"><span class="nav-icon">🎓</span>How to Apply</div>
+      <div class="nav-item" onclick="quickAsk('What are CHARUSAT B.Tech programmes - fees, seats, eligibility 2026-27?')"><span class="nav-icon">💻</span>B.Tech 2026</div>
+      <div class="nav-item" onclick="quickAsk('What all courses and programmes does CHARUSAT offer with fees?')"><span class="nav-icon">📚</span>All Courses & Fees</div>
+      <div class="nav-item" onclick="quickAsk('What is the NRI quota and fees at CHARUSAT?')"><span class="nav-icon">🌍</span>NRI Quota</div>
+      <div class="nav-item" onclick="quickAsk('What is the fees refund policy at CHARUSAT for 2026-27?')"><span class="nav-icon">💰</span>Refund Policy</div>
+
+      <div class="nav-section-label">Scholarships</div>
+      <div class="nav-item" onclick="quickAsk('What scholarships are available at CHARUSAT? List all types with eligibility and amounts.')"><span class="nav-icon">🏆</span>All Scholarships</div>
+      <div class="nav-item" onclick="quickAsk('What are MYSY and government scholarships available at CHARUSAT?')"><span class="nav-icon">📋</span>MYSY / Govt Aid</div>
+      <div class="nav-item" onclick="quickAsk('Tell me about CHARUSAT merit scholarships for B.Tech students')"><span class="nav-icon">⭐</span>Merit Scholarships</div>
+
+      <div class="nav-section-label">Institutes & Faculty</div>
+      <div class="nav-item" onclick="quickAsk('List all institutes and departments at CHARUSAT with details')"><span class="nav-icon">🏛️</span>All Institutes</div>
+      <div class="nav-item" onclick="quickAsk('Tell me about CSPIT faculty and how to contact them')"><span class="nav-icon">👨‍🏫</span>CSPIT Faculty</div>
+      <div class="nav-item" onclick="quickAsk('Tell me about DEPSTAR faculty and how to contact them')"><span class="nav-icon">👨‍🏫</span>DEPSTAR Faculty</div>
+      <div class="nav-item" onclick="quickAsk('Tell me about IIIM management faculty and contact')"><span class="nav-icon">👨‍🏫</span>IIIM Faculty</div>
+      <div class="nav-item" onclick="quickAsk('Tell me about RPCP pharmacy faculty and contact')"><span class="nav-icon">👨‍🏫</span>RPCP Faculty</div>
+      <div class="nav-item" onclick="quickAsk('Tell me about CMPICA computer applications faculty and contact')"><span class="nav-icon">👨‍🏫</span>CMPICA Faculty</div>
+      <div class="nav-item" onclick="quickAsk('Tell me about PDPIAS applied science faculty')"><span class="nav-icon">👨‍🏫</span>PDPIAS Faculty</div>
+      <div class="nav-item" onclick="quickAsk('Tell me about ARIP physiotherapy faculty')"><span class="nav-icon">👨‍🏫</span>ARIP Faculty</div>
+      <div class="nav-item" onclick="quickAsk('Tell me about BDIAS and MTIN faculty')"><span class="nav-icon">👨‍🏫</span>BDIAS / MTIN</div>
+
+      <div class="nav-section-label">Campus Life</div>
+      <div class="nav-item" onclick="quickAsk('What are CHARUSAT placement records and packages for 2024-25 and 2025-26?')"><span class="nav-icon">💼</span>Placements</div>
+      <div class="nav-item" onclick="quickAsk('Tell me about hostel facilities and fees at CHARUSAT 2026-27')"><span class="nav-icon">🏠</span>Hostel Facilities</div>
+      <div class="nav-item" onclick="quickAsk('What sports and NCC facilities are available at CHARUSAT?')"><span class="nav-icon">🏟️</span>Sports & NCC</div>
+      <div class="nav-item" onclick="quickAsk('How to reach CHARUSAT campus in Changa? Transportation options?')"><span class="nav-icon">🚌</span>How to Reach</div>
+      <div class="nav-item" onclick="quickAsk('What are the counselling desks and contact persons at CHARUSAT?')"><span class="nav-icon">📞</span>Contacts</div>
+
+      <div class="nav-section-label">Programmes</div>
+      <div class="nav-item" onclick="quickAsk('Tell me about BCA, MCA and computer science programmes at CHARUSAT CMPICA')"><span class="nav-icon">🖥️</span>CS & IT (CMPICA)</div>
+      <div class="nav-item" onclick="quickAsk('Tell me about MBA and management programmes at CHARUSAT IIIM')"><span class="nav-icon">📊</span>MBA / Management</div>
+      <div class="nav-item" onclick="quickAsk('Tell me about pharmacy programmes at CHARUSAT RPCP - fees, seats, eligibility')"><span class="nav-icon">💊</span>Pharmacy (RPCP)</div>
+      <div class="nav-item" onclick="quickAsk('Tell me about science programmes at CHARUSAT PDPIAS - Biotech, Chemistry, Physics')"><span class="nav-icon">🔬</span>Sciences (PDPIAS)</div>
+      <div class="nav-item" onclick="quickAsk('Tell me about medical and allied health programmes - BPT, nursing, BMRIT at CHARUSAT')"><span class="nav-icon">🏥</span>Medical / Allied</div>
+    </div>
+  </div>
+
+  <!-- CHAT -->
+  <div class="chat-wrapper">
+    <div class="neon-line"></div>
+
+    <div class="chat-header">
+      <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+      <div class="logo-ring">CU</div>
+      <div>
+        <div class="header-name">CHARUSAT University Assistant</div>
+        <div class="header-sub"><span class="dot"></span>AI-Powered · Online</div>
+      </div>
+      <div class="powered">Powered by<br><b>Gemini AI</b></div>
+    </div>
+
+    <div class="messages" id="messages">
+      <div class="msg bot">
+        <div class="avatar">CU</div>
+        <div class="bubble">
+          👋 Hello! I'm the <strong>CHARUSAT University AI Assistant</strong> — powered by the official 2026 Admission Counselling Booklet.<br><br>
+          I can instantly answer questions about:
+          <div class="greeting-chips">
+            <span class="g-chip" onclick="quickAsk('B.Tech admissions 2026 - fees, eligibility, seats')">B.Tech 2026</span>
+            <span class="g-chip" onclick="quickAsk('All scholarships at CHARUSAT with amounts and eligibility')">Scholarships</span>
+            <span class="g-chip" onclick="quickAsk('CHARUSAT placement records 2024-25 with packages')">Placements</span>
+            <span class="g-chip" onclick="quickAsk('Hostel fees and facilities at CHARUSAT 2026-27')">Hostel Fees</span>
+            <span class="g-chip" onclick="quickAsk('MYSY and government scholarships at CHARUSAT')">MYSY / Govt Aid</span>
+            <span class="g-chip" onclick="quickAsk('Tell me about CSPIT faculty and how to contact them')">Faculty Info</span>
+          </div>
+          <br>Ask me anything below to get started! ✨
+        </div>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <textarea id="userInput" placeholder="Ask me anything about CHARUSAT..." rows="1"
+        onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+      <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+        <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Error parser ────────────────────────────────────────────────
+function parseGeminiError(status, body) {
+  const msg = body?.error?.message || '';
+  if (status === 429) return {
+    title: '⏱️ Rate Limit Reached',
+    detail: 'The assistant has hit its usage limit for now.',
+    hint: 'Please wait a minute and try again.'
+  };
+  if (status === 400 || status === 403) return {
+    title: '🔧 Service Configuration Issue',
+    detail: msg || 'The assistant is temporarily misconfigured.',
+    hint: 'Please contact the site admin — the server-side API key may need attention.'
+  };
+  if (status === 503 || status === 529) return {
+    title: '🔧 Service Temporarily Busy',
+    detail: 'The AI service is overloaded right now.',
+    hint: 'Wait 30 seconds and try again.'
+  };
+  return {
+    title: `❌ Error (${status})`,
+    detail: msg || 'An unexpected error occurred.',
+    hint: 'Please try again shortly.'
+  };
+}
+
+// ── System prompt ───────────────────────────────────────────────
+const SYSTEM_PROMPT = `You are the official AI assistant for CHARUSAT University (Charotar University of Science and Technology), Changa, Anand, Gujarat, India.
+
+RESPONSE RULES:
+- Be CONCISE — answer directly, no long preambles
+- Use HTML TABLES for structured data (fees, placements, seats, scholarships)
+- Use clickable links: <a href="URL" target="_blank">Label</a> — NEVER show raw URLs
+- Use <strong> for important numbers (fees, packages, ranks)
+- Use <br> for line breaks, bullet points with •
+- Start with the key answer, then add details
+
+TABLE FORMAT: <table><tr><th>Col</th><th>Col</th></tr><tr><td>data</td><td>data</td></tr></table>
+
+=== OFFICIAL LINKS ===
+University: <a href="https://www.charusat.ac.in" target="_blank">CHARUSAT Website</a>
+MYSY: <a href="https://mysy.guj.nic.in" target="_blank">MYSY Portal</a>
+Scholarships: <a href="https://scholarships.gujarat.gov.in" target="_blank">Gujarat Scholarships</a>
+Digital Gujarat: <a href="https://www.digitalgujarat.gov.in" target="_blank">Digital Gujarat</a>
+GSRTC: <a href="https://gsrtc.in/site/" target="_blank">GSRTC Bus Info</a>
+
+=== FACULTY DIRECTORIES ===
+CSPIT: <a href="https://cspit.charusat.ac.in/faculty" target="_blank">CSPIT Faculty</a>
+DEPSTAR: <a href="https://depstar.charusat.ac.in/faculty" target="_blank">DEPSTAR Faculty</a>
+IIIM: <a href="https://iiim.charusat.ac.in/faculty" target="_blank">IIIM Faculty</a>
+PDPIAS: <a href="https://pdpis.charusat.ac.in/faculty" target="_blank">PDPIAS Faculty</a>
+CMPICA: <a href="https://cmpica.charusat.ac.in/faculty" target="_blank">CMPICA Faculty</a>
+RPCP: <a href="https://rpcp.charusat.ac.in/faculty" target="_blank">RPCP Faculty</a>
+ARIP: <a href="https://arip.charusat.ac.in/faculty" target="_blank">ARIP Faculty</a>
+BDIAS: <a href="https://www.charusat.ac.in/bdips/index.html" target="_blank">BDIAS Page</a>
+MTIN: <a href="https://www.charusat.ac.in/mtin/index.html" target="_blank">MTIN Page</a>
+
+=== UNIVERSITY OVERVIEW ===
+NAAC Grade A+ | 125 acres campus, Changa, Anand, Gujarat
+11,000+ students | 750+ faculty | 17,000+ placed | 2,000+ scholarships
+Wi-Fi 1800 MBPS | Contact: 02697-265011/21
+
+=== INSTITUTES ===
+CSPIT - Chandubhai S Patel Institute of Technology (CE, CSE, IT, AIML, EC, ME, CL, EE)
+DEPSTAR - Devang Patel Institute of Advance Technology and Research (CE, CSE, IT)
+RPCP - Ramanbhai Patel College of Pharmacy
+CMPICA - Chandaben Mohanbhai Patel Institute of Computer Applications
+IIIM - Indukaka Ipcowala Institute of Management
+PDPIAS - P D Patel Institute of Applied Science
+ARIP - Ashok and Rita Patel Institute of Physiotherapy
+MTIN - Manikaka Topawala Institute of Nursing
+BDIAS - Bapubhai Desaibhai Patel Institute of Allied Sciences
+
+=== B.TECH PROGRAMMES & FEES (2026-27) ===
+CSE: 210 seats | Rs 1,72,000/yr | ACPC rank up to 4000
+CE: 240 seats | Rs 1,72,000/yr | ACPC rank up to 4000
+IT: 150 seats | Rs 1,72,000/yr | ACPC rank up to 4000
+AIML: 60 seats | Rs 1,72,000/yr | ACPC rank up to 4000
+EC: 120 seats | Rs 1,72,000/yr | ACPC rank up to 6500
+ME: 60 seats | Rs 1,35,000/yr | ACPC rank up to 15000
+CL: 30 seats | Rs 1,10,000/yr | ACPC rank up to 15000
+EE: 30 seats | Rs 1,10,000/yr | ACPC rank up to 15000
+Eligibility: Min 45% PCM + GUJCET
+M.Tech: Rs 1,25,000/yr | BE/BTech 50% + GATE/PGCET
+Honours/Minor: EV Systems, AI&ML, Robotics & IoT, Data Science, GIS, 3D Printing, Green Tech, Smart Cities
+
+=== SEAT DISTRIBUTION (B.Tech) ===
+CSE: Total 210 | Govt 105 | Mgmt 74 | NRI 31
+CE: Total 240 | Govt 120 | Mgmt 84 | NRI 36
+IT: Total 150 | Govt 75 | Mgmt 53 | NRI 22
+AIML: Total 60 | Govt 30 | Mgmt 21 | NRI 9
+EC: Total 120 | Govt 60 | Mgmt 42 | NRI 18
+
+=== NRI QUOTA ===
+CSE: 31 seats | USD 5000 | Rs 4,50,000/yr
+CE: 36 seats | USD 4500 | Rs 4,05,000/yr
+IT: 22 seats | USD 4000 | Rs 3,60,000/yr
+AIML: 9 seats | USD 4000 | Rs 3,60,000/yr
+EC: 18 seats | USD 4000 | Rs 3,60,000/yr
+(1 USD = Rs 90 INR) | Sponsor: blood relation/friend | Docs: passport + notarized sponsorship letter
+
+=== REFUND POLICY ===
+Before class commencement: Rs 1,000 deduction
+Within 30 days: Rs 5,000 deduction
+After 30 days but before first internal exam: Rs 10,000 deduction
+After first internal exam: NO REFUND
+Enrolment fee Rs 1,500: always non-refundable
+
+=== PHARMACY (RPCP) ===
+B.Pharm: 100 seats | Rs 1,80,000/yr | 45% PCM/PCB + GUJCET/NEET
+M.Pharm: Rs 2,20,000/yr | B.Pharm 55% + GPAT/PGCET
+Specializations: Pharma Tech, Regulatory Affairs, QA, Pharmacology, Pharma Chemistry
+
+=== SCIENCE (PDPIAS) ===
+B.Sc Biotech/Micro/Biochem: 150 seats | Rs 80,000/yr
+B.Sc Chemistry Hons: 40 seats | Rs 50,000/yr
+B.Sc Physics Hons: 20 seats | Rs 50,000/yr
+M.Sc Biotech/Micro/Biochem: Rs 1,00,000/yr
+M.Sc Org Chemistry: Rs 85,000/yr | M.Sc Physics: Rs 50,000/yr | M.Sc Maths: Rs 45,000/yr
+
+=== COMPUTER APPLICATIONS (CMPICA) ===
+BCA/BCA Hons: 240 seats | Rs 80,000/yr | 50% Commerce/Science
+B.Sc IT/Hons: 120 seats | Rs 75,000/yr | 50% Science
+MCA: 120 seats | Rs 1,40,000/yr | Grad 50% + CMAT
+M.Sc IT: 180 seats | Rs 1,00,000/yr
+
+=== MANAGEMENT (IIIM) ===
+BBA/BBA Hons: 240 seats | Rs 1,20,000/yr | 60% any stream with English
+MBA: 120 seats | Rs 1,63,000/yr | Grad 60% + CMAT preferred
+MBA Intl Business: 10 seats | Rs 1,45,000/yr
+
+=== MEDICAL & ALLIED SCIENCES ===
+BPT: 100 seats | SQ Rs 1,63,000 / MQ Rs 1,80,000
+B.Sc Nursing: 80 seats | SQ Rs 1,59,000 / MQ Rs 2,00,000
+GNM: 40 seats | Rs 1,30,000/yr
+BMRIT: 30 seats | Rs 65,000 | BMLS: 30 seats | Rs 55,000
+BAOTT: 30 seats | Rs 65,000 | BOP: 20 seats | Rs 72,000
+MPT: 21 seats | Rs 2,50,000/yr | M.Sc Nursing: 4 seats each | Rs 1,70,000/yr
+
+=== CHARUSAT MERIT SCHOLARSHIPS ===
+B.Tech CSE/CE/IT/AIML: ACPC rank up to 4000 -> 100% tuition (top 10)
+B.Tech EC: ACPC rank up to 6500 -> 100% tuition
+B.Tech ME/CL/EE: ACPC rank up to 15000 -> 100% tuition (top 5)
+B.Pharm: ACPC rank up to 2000 -> 100% tuition (top 3)
+BCA: >90% HSC -> 100% | >70% -> Rs 10,000
+B.Sc IT: >80% -> 100% | >65% -> Rs 10,000
+BBA: >90% -> 100% | >75% -> Rs 20,000
+B.Sc Biotech/Micro/Biochem: >85% -> 100% | >70% -> Rs 5,000
+BPT: >80% HSC -> 100% (top 5%) | >75% -> Rs 30,000
+M.Tech: CGPA >= 8 or GATE -> 100% tuition
+All scholarships require clearing all exams without backlog each year
+
+=== GOVERNMENT SCHOLARSHIPS ===
+MYSY: 80 percentile in 12th, income < Rs 6L/yr -> 50% tuition or Rs 50,000 (whichever lower) | Register: mysy.guj.nic.in
+CMSS: Gujarat Board 10+2, income < Rs 6L -> 50% tuition or Rs 50,000
+PRAGATI (AICTE Girls): 2 girls/family, income < Rs 8L, 1st yr UG engineering
+SC Post Matric: SC + freeship card, 50% marks, income < Rs 2.5L -> Full tuition
+SC Girls: SC female, income > Rs 2.5L -> Full tuition
+PM YASASVI (OBC/EBC/DNT): income < Rs 2.5L
+ST Freeship: ST + freeship card, income < Rs 2.5L -> Full tuition
+GATE/GPAT Scholarships for M.Tech/M.Pharm: as per AICTE norms
+All govt scholarships: register at digitalgujarat.gov.in
+
+=== PLACEMENT RECORDS (2024-25) ===
+CSPIT CSE: 100% | Highest: 75 LPA | Avg: 6.07 LPA
+CSPIT CE: 100% | Highest: 16 LPA | Avg: 5.7 LPA
+CSPIT IT: 100% | Highest: 12 LPA | Avg: 5.5 LPA
+CSPIT EC: 100% | Highest: 6 LPA | Avg: 4.7 LPA
+CSPIT ME: 92% | Highest: 7 LPA | Avg: 4.5 LPA
+DEPSTAR CSE: 100% | Highest: 15 LPA | Avg: 5.35 LPA
+DEPSTAR IT: 100% | Highest: 7.75 LPA | Avg: 5 LPA
+DEPSTAR CE: 95% | Highest: 9.2 LPA | Avg: 4.6 LPA
+CMPICA: 99% | Highest: 9 LPA | Avg: 4.2 LPA
+IIIM MBA: 98% | Highest: 14 LPA | Avg: 3.5 LPA
+RPCP: 92% | Highest: 4.32 LPA | Avg: 3.6 LPA
+ARIP: 95% | Highest: 7.2 LPA | Avg: 2.5 LPA
+
+2025-26 (Ongoing):
+CSPIT CE: 93% | Highest: 25 LPA | Avg: 5.7 LPA
+CSPIT CSE: 89% | Highest: 8 LPA | Avg: 5.2 LPA
+CSPIT AIML: 72% | Highest: 8 LPA | Avg: 6 LPA
+CSPIT ME: 100% | Highest: 5.5 LPA
+
+Top Recruiters: Amazon, TCS, Meditab, Thomson Reuters, Crest Data, Sophos, Jeavio, Adani, Torrent Power, Einfochips, Sankalp Semiconductor, Bosch Rexroth, Zydus Cadila, Axis Bank, ICICI Bank
+
+=== HOSTEL FACILITIES ===
+Girls: 7 on-campus hostels | 1800+ capacity
+Non-AC: Hostel Rs 36,000 + Mess Rs 41,000 = Rs 77,000/yr (+ Rs 5,000 refundable deposit)
+AC: Hostel Rs 50,000 + Mess Rs 41,000 = Rs 91,000/yr
+Contact: +91 78638 10278 | hostel@charusat.ac.in
+Facilities: Gym, Badminton, Volleyball, TT, Chess, Carrom, RO water, Wi-Fi, 24x7 medical, Banking
+Boys: Private hostels near campus (Utkarsh, Shreedeep, Prince, Pramukhpreet, Royal Care, and more)
+
+=== SPORTS & NCC ===
+Indoor: Badminton, TT, Basketball, Volleyball, Chess, Karate, Carrom, Kabaddi
+Outdoor: Cricket, Football, Handball, Kho-Kho, Kabaddi, Pickle Ball, Frisbee
+NCC: 80 cadets | Army Division | 33% seats for girls | AIU member university
+
+=== HOW TO REACH ===
+Address: Off Nadiad-Petlad Highway, Changa 388421, Anand, Gujarat
+Ahmedabad: 65 km | Anand: 22 km | Vadodara: 65 km
+Nearest railway: Nadiad (12 km), Anand (22 km)
+GSRTC buses: Ahmedabad-Changa, Vadodara-Changa routes available
+Private transport from Vadodara, Ahmedabad, Anand, Nadiad, Khambhat
+
+=== COUNSELLING CONTACTS ===
+University: 02697-265011/21
+CSPIT: Mr Yatin Talati | 9724635941
+DEPSTAR: Mr Anil Kalyani | 9825421376
+RPCP: Dr Amit Patel | 9924127044 / Dr Umang Shah | 9537554414
+CMPICA: Dr Jaimin Undavia | 7283968701
+IIIM: Mr Kirti Patel | 7043520693
+PDPIAS: Dr Dijit Patel | 9998902743
+ARIP: Dr Vidhi Thakar | 9426778772
+MTIN: Dr Vipin Vageriya | 7874038375
+BDIAS: Dr Khushal Patel | 9978365630
+Hours: Mon-Sat 9:00 AM - 4:30 PM (except 2nd and 4th Saturdays)
+
+=== ADMISSION PROCESS 2026 ===
+1. Register at CHARUSAT Website or Admission Office
+2. Verify mobile/email via OTP
+3. Fill online form + pay Rs 350 application fee
+4. Enter board marks + GUJCET/JEE/NEET percentile
+5. Upload: photo, marksheets, school leaving certificate
+6. Merit-based admission (ACPC/ACPMC norms)
+7. Document verification -> pay fees -> provisional admission
+8. Classes commence
+NOTE: ALL ADMISSIONS ARE MERIT-BASED. NO DONATION OR CAPITATION FEES.`;
+
+// ── State ──────────────────────────────────────────────────────
+let chatHistory = []; // [{role:"user"|"model", parts:[{text:"..."}]}]
+let isLoading = false;
+let sidebarOpen = true;
+
+// ── UI helpers ─────────────────────────────────────────────────
+function toggleSidebar() {
+  sidebarOpen = !sidebarOpen;
+  document.getElementById('sidebar').classList.toggle('collapsed', !sidebarOpen);
+}
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 110) + 'px';
+}
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+function quickAsk(text) {
+  document.getElementById('userInput').value = text;
+  sendMessage();
+}
+function scrollBottom() { const m = document.getElementById('messages'); m.scrollTop = m.scrollHeight; }
+function appendUserMsg(text) {
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg user';
+  const safe = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  div.innerHTML = `<div class="avatar user-av">You</div><div class="bubble">${safe}</div>`;
+  msgs.appendChild(div); scrollBottom();
+}
+function showBotMsg(html) {
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg bot';
+  div.innerHTML = `<div class="avatar">CU</div><div class="bubble">${html}</div>`;
+  msgs.appendChild(div); scrollBottom();
+}
+function createBotBubble() {
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg bot';
+  const id = 'b_' + Date.now();
+  div.innerHTML = `<div class="avatar">CU</div><div class="bubble streaming-cursor" id="${id}"></div>`;
+  msgs.appendChild(div); scrollBottom();
+  return id;
+}
+function showTyping() {
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg bot'; div.id = 'typing_dot';
+  div.innerHTML = `<div class="avatar">CU</div><div class="bubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
+  msgs.appendChild(div); scrollBottom();
+}
+function removeTyping() { const t = document.getElementById('typing_dot'); if (t) t.remove(); }
+function showError(err) {
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg bot';
+  div.innerHTML = `<div class="avatar">CU</div>
+    <div class="error-bubble">
+      <div class="err-title">${err.title}</div>
+      <div class="err-detail">${err.detail}</div>
+      <div class="err-hint">${err.hint}</div>
+    </div>`;
+  msgs.appendChild(div); scrollBottom();
+}
+
+// ── Send ───────────────────────────────────────────────────────
+async function sendMessage() {
+  if (isLoading) return;
+
+  const input = document.getElementById('userInput');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = ''; input.style.height = 'auto';
+  isLoading = true;
+  document.getElementById('sendBtn').disabled = true;
+
+  appendUserMsg(text);
+  chatHistory.push({ role: 'user', parts: [{ text }] });
+  showTyping();
+
+  try {
+    // Calls our own backend proxy at /api/chat — NOT Gemini directly.
+    // The Gemini API key lives only in the serverless function's
+    // environment variables, never in this browser-side code.
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: chatHistory,
+        generationConfig: { maxOutputTokens: 1024, temperature: 0.3 }
+      })
+    });
+
+    removeTyping();
+
+    if (!res.ok) {
+      let bodyJson = {};
+      try { bodyJson = await res.json(); } catch(e) {}
+      showError(parseGeminiError(res.status, bodyJson));
+      chatHistory.pop();
+      isLoading = false;
+      document.getElementById('sendBtn').disabled = false;
+      return;
+    }
+
+    const bubbleId = createBotBubble();
+    const bubble = document.getElementById(bubbleId);
+    const msgs = document.getElementById('messages');
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = '';
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (!data || data === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(data);
+          const chunk = parsed?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          if (chunk) {
+            fullText += chunk;
+            bubble.innerHTML = fullText;
+            msgs.scrollTop = msgs.scrollHeight;
+          }
+        } catch(e) {}
+      }
+    }
+
+    bubble.classList.remove('streaming-cursor');
+    if (!fullText) bubble.innerHTML = 'Sorry, I could not generate a response. Please try again.';
+
+    chatHistory.push({ role: 'model', parts: [{ text: fullText }] });
+
+    // Keep last 30 turns (60 entries) to avoid token overflow
+    if (chatHistory.length > 60) chatHistory = chatHistory.slice(-60);
+
+  } catch(err) {
+    removeTyping();
+    showError({
+      title: '🌐 Connection Error',
+      detail: err.message || 'Network request failed.',
+      hint: 'Check your internet connection and try again.'
+    });
+    chatHistory.pop();
+  }
+
+  isLoading = false;
+  document.getElementById('sendBtn').disabled = false;
+}
+</script>
+</body>
+</html>
