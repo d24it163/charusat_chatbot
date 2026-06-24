@@ -15,6 +15,11 @@ export default async function handler(req, res) {
     res.status(500).json({ error: { message: 'Server is missing GEMINI_API_KEY env var.' } });
     return;
   }
+  if (!apiKey.startsWith('AIza') || apiKey.length < 25) {
+    console.error('GEMINI_API_KEY looks malformed', { length: apiKey.length, prefix: apiKey.slice(0, 4) });
+    res.status(500).json({ error: { message: 'GEMINI_API_KEY env var looks malformed (check for extra quotes/spaces).' } });
+    return;
+  }
 
   // OPTIONAL: lightweight same-origin check.
   // This is NOT a security boundary (headers can be spoofed by non-browser
@@ -53,6 +58,14 @@ export default async function handler(req, res) {
       // error parser (parseGeminiError) keeps working unmodified.
       let body;
       try { body = await geminiRes.json(); } catch (e) { body = {}; }
+      // Log the real status + message to Vercel's Runtime Logs so we can
+      // diagnose the actual cause instead of guessing from the generic
+      // frontend error bubble.
+      console.error('Gemini API error', {
+        status: geminiRes.status,
+        statusText: geminiRes.statusText,
+        body: JSON.stringify(body)
+      });
       res.status(geminiRes.status).json(body);
       return;
     }
@@ -75,6 +88,7 @@ export default async function handler(req, res) {
     res.end();
 
   } catch (err) {
+    console.error('Proxy request failed', { message: err.message, stack: err.stack });
     res.status(500).json({ error: { message: err.message || 'Proxy request failed.' } });
   }
 }
